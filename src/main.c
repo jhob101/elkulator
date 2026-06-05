@@ -64,6 +64,109 @@
 int autoboot;
 FILE *rlog;
 
+/* ---------------------------------------------------------------------------
+ * Autotype: inject a string of keystrokes into the emulated keyboard once the
+ * machine has booted. Used to auto-run tape games (e.g. CHAIN"" + RETURN)
+ * straight from the command line / a .uef file association.
+ * ------------------------------------------------------------------------- */
+#define AUTOTYPE_MAX_LEN     128
+#define AUTOTYPE_BOOT_DELAY  150  /* frames (~3s @ 50Hz) to wait before typing */
+#define AUTOTYPE_KEY_DOWN    3    /* frames a key is held                      */
+#define AUTOTYPE_KEY_GAP     3    /* frames released between keys              */
+
+static char autotype_buffer[AUTOTYPE_MAX_LEN];
+static int  autotype_pos    = 0;     /* index of next char to type            */
+static int  autotype_delay  = 0;     /* boot countdown before typing starts   */
+static int  autotype_timer  = 0;     /* frames remaining in current sub-phase  */
+static int  autotype_down   = 0;     /* non-zero while a key is currently held  */
+static elk_key_id_t autotype_cur_key   = ELK_KEY_NONE;
+static int          autotype_cur_shift = 0;
+
+/* Map an ASCII character to the Electron key (and whether SHIFT is needed).
+ * The Electron powers up with CAPS LOCK on, so letters are unshifted. */
+static elk_key_id_t autotype_map(char ch, int *shift)
+{
+    *shift = 0;
+    if (ch >= 'a' && ch <= 'z') return ELK_KEY_A + (ch - 'a');
+    if (ch >= 'A' && ch <= 'Z') return ELK_KEY_A + (ch - 'A');
+    if (ch >= '0' && ch <= '9') return ELK_KEY_0 + (ch - '0');
+    switch (ch)
+    {
+        case ' ':  return ELK_KEY_SPACE;
+        case '\r':
+        case '\n':
+        case '~':  return ELK_KEY_RETURN;               /* ~ = RETURN macro */
+        case '"':  *shift = 1; return ELK_KEY_2;        /* SHIFT+2          */
+        case '*':  *shift = 1; return ELK_KEY_COLON;    /* SHIFT+:          */
+        case ':':  return ELK_KEY_COLON;
+        case ';':  return ELK_KEY_SEMICOLON;
+        case '.':  return ELK_KEY_FULLSTOP;
+        case ',':  return ELK_KEY_COMMA;
+        case '/':  return ELK_KEY_SLASH;
+        case '=':  return ELK_KEY_EQUALS;
+        default:   return ELK_KEY_NONE;                 /* unsupported: skip */
+    }
+}
+
+void autotype_set(const char *str)
+{
+    if (!str) return;
+    strncpy(autotype_buffer, str, AUTOTYPE_MAX_LEN - 1);
+    autotype_buffer[AUTOTYPE_MAX_LEN - 1] = 0;
+    autotype_pos   = 0;
+    autotype_delay = AUTOTYPE_BOOT_DELAY;
+    autotype_timer = 0;
+    autotype_down  = 0;
+}
+
+/* Called once per emulated frame from runelk(). Drives the key matrix. */
+static void autotype_poll(void)
+{
+    if (autotype_buffer[0] == 0) return;        /* nothing queued            */
+
+    if (autotype_delay > 0)
+    {
+        autotype_delay--;
+        return;
+    }
+
+    if (autotype_timer > 0)
+    {
+        autotype_timer--;
+        return;
+    }
+
+    if (autotype_down)
+    {
+        /* Release the key we were holding. */
+        keyboard_set_elk_key_state(autotype_cur_key, false);
+        if (autotype_cur_shift) keyboard_set_elk_key_state(ELK_KEY_SHIFT, false);
+        autotype_down  = 0;
+        autotype_timer = AUTOTYPE_KEY_GAP;
+        return;
+    }
+
+    /* Find the next typeable character. */
+    while (autotype_buffer[autotype_pos] != 0)
+    {
+        int shift;
+        elk_key_id_t key = autotype_map(autotype_buffer[autotype_pos], &shift);
+        autotype_pos++;
+        if (key == ELK_KEY_NONE) continue;      /* skip unsupported chars    */
+
+        autotype_cur_key   = key;
+        autotype_cur_shift = shift;
+        if (shift) keyboard_set_elk_key_state(ELK_KEY_SHIFT, true);
+        keyboard_set_elk_key_state(key, true);
+        autotype_down  = 1;
+        autotype_timer = AUTOTYPE_KEY_DOWN;
+        return;
+    }
+
+    /* Done - clear the buffer so we stop polling. */
+    autotype_buffer[0] = 0;
+}
+
 int drawit=0;
 
 char exedir[MAX_PATH_FILENAME_BUFFER_SIZE];
@@ -139,6 +242,7 @@ void initelk(int argc, char *argv[])
     int parallelnext=0;
     int serialnext=0;
     int serialdebugnext=0;
+    int autotypenext=0;
     elkConfig.disc.discname[0]  = 0;
     elkConfig.disc.discname2[0] = 0;
     tapename[0] = 0;
@@ -162,6 +266,8 @@ void initelk(int argc, char *argv[])
             printf("-serialdebug n  - set serial debugging output level to n\n");
             printf("-rom number rom - load rom into the numbered bank\n");
             printf("-debug          - start debugger\n");
+            printf("-autotype str   - type str at boot (use ~ for RETURN)\n");
+            printf("-chain          - auto-type CHAIN\"\" + RETURN to run a tape game\n");
             exit(-1);
         }
         else
@@ -199,6 +305,19 @@ void initelk(int argc, char *argv[])
         else if (!strcasecmp(argv[c],"-debug"))
         {
             debug=debugon=1;
+        }
+        else if (!strcasecmp(argv[c],"-chain"))
+        {
+            autotype_set("CHAIN\"\"~");
+        }
+        else if (!strcasecmp(argv[c],"-autotype"))
+        {
+            autotypenext=1;
+        }
+        else if (autotypenext)
+        {
+            autotype_set(argv[c]);
+            autotypenext=0;
         }
         else if (tapenext)
         {
@@ -314,6 +433,7 @@ native_timediff_t runelk()
     if (wantsavestate) dosavestate(ssname);
     if (infocus) video_poll_joystick();
     if (autoboot) autoboot--;
+    autotype_poll();
     ddnoiseframes++;
     if (ddnoiseframes>=5)
     {
