@@ -470,3 +470,11 @@ void keyboard_keyup(host_key_t hostkey)
     }
 }
 
+void keyboard_set_elk_key_state(elk_key_id_t elk_key, bool pressed)
+{
+    if(elk_key > ELK_KEY_NONE && elk_key < ELK_KEY_MAX)
+    {
+        elk_key_state[elk_key] = pressed;
+    }
+}
+

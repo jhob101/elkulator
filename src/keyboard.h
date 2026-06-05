@@ -251,4 +251,8 @@ elk_key_id_t keyboard_config_string_to_elk_key_id(const char * host_config_str);
 void keyboard_keydown(host_key_t hostkey);
 void keyboard_keyup(host_key_t hostkey);
 
+// Directly drive an Electron key in the emulated key matrix. Used by the
+// autotype feature to inject keystrokes that did not originate from a host key.
+void keyboard_set_elk_key_state(elk_key_id_t elk_key, bool pressed);
+
 #endif // _KEYBOARD_H
