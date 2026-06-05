@@ -162,6 +162,7 @@ void initelk(int argc, char *argv[])
             printf("-serialdebug n  - set serial debugging output level to n\n");
             printf("-rom number rom - load rom into the numbered bank\n");
             printf("-debug          - start debugger\n");
+            printf("-fullscreen     - start in fullscreen mode\n");
             exit(-1);
         }
         else
@@ -199,6 +200,10 @@ void initelk(int argc, char *argv[])
         else if (!strcasecmp(argv[c],"-debug"))
         {
             debug=debugon=1;
+        }
+        else if (!strcasecmp(argv[c],"-fullscreen"))
+        {
+            elkConfig.display.fullscreen = 1;
         }
         else if (tapenext)
         {
@@ -380,7 +385,10 @@ int main(int argc, char **argv)
     initHandlers();
     initelk(argc,argv);
     video_register_close_button_handler(native_window_close_button_handler);
-    
+
+    /* Start in fullscreen if requested via elk.cfg (fullscreen=1) or -fullscreen. */
+    if (elkConfig.display.fullscreen) video_enterfullscreen();
+
     log_config_vars();
     #ifdef HAL_ALLEGRO_4 
         while (!quited)
