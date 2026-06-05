@@ -268,6 +268,7 @@ void initelk(int argc, char *argv[])
             printf("-debug          - start debugger\n");
             printf("-autotype str   - type str at boot (use ~ for RETURN)\n");
             printf("-chain          - auto-type CHAIN\"\" + RETURN to run a tape game\n");
+            printf("-fullscreen     - start in fullscreen mode\n");
             exit(-1);
         }
         else
@@ -318,6 +319,10 @@ void initelk(int argc, char *argv[])
         {
             autotype_set(argv[c]);
             autotypenext=0;
+        }
+        else if (!strcasecmp(argv[c],"-fullscreen"))
+        {
+            elkConfig.display.fullscreen = 1;
         }
         else if (tapenext)
         {
@@ -500,7 +505,10 @@ int main(int argc, char **argv)
     initHandlers();
     initelk(argc,argv);
     video_register_close_button_handler(native_window_close_button_handler);
-    
+
+    /* Start in fullscreen if requested via elk.cfg (fullscreen=1) or -fullscreen. */
+    if (elkConfig.display.fullscreen) video_enterfullscreen();
+
     log_config_vars();
     #ifdef HAL_ALLEGRO_4 
         while (!quited)

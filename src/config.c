@@ -202,7 +202,7 @@ void loadconfig()
 
         elkConfig.display.drawmode=getintcfg("filter",0);
 
-        elkConfig.display.fullscreen = 0; // Currently this is not saved in the elk.cfg file.
+        elkConfig.display.fullscreen = getboolcfg("fullscreen", false);
         
         s=getstringcfg("discname_0");
         if (s)
@@ -350,6 +350,7 @@ void saveconfig()
         writeintcfg("win_pixelratio", elkConfig.display.maintain_pixel_ratio);
         writeintcfg("win_width", elkConfig.display.native_window_width);
         writeintcfg("win_height", elkConfig.display.native_window_height);
+        writeboolcfg("fullscreen", elkConfig.display.fullscreen);
         writergbcfg("border_col", elkConfig.display.border);
         
         writeintcfg("joy_firstbyte", elkConfig.expansion.firstbyte);
