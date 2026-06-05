@@ -166,10 +166,12 @@ void loadconfig()
         char fn[MAX_PATH_FILENAME_BUFFER_SIZE + strlen(elk_cfg_filename)];
         cfg_rgb_t border_rgb_default;
 
-        // Default border colour is black.
-        border_rgb_default.red = 0;
-        border_rgb_default.green = 0;
-        border_rgb_default.blue = 0;
+        // Default border/surround colour is a near-black grey (#0E0E0E) rather
+        // than pure black, so the extent of the screen stays visible for games
+        // that render a black background.
+        border_rgb_default.red = 0x0E;
+        border_rgb_default.green = 0x0E;
+        border_rgb_default.blue = 0x0E;
 
         sprintf(fn,"%s%s",exedir, elk_cfg_filename);
         cfgfile=fopen(fn,"rt");
